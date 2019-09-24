@@ -1,5 +1,81 @@
 ## 2019
 
+### 0  记录此文档之前的事情
+
+1. #### 无法在这个大型工作区中监视文件更改。请按照说明链接来解决此问题。
+
+http://www.deadnine.com/somehow/2019/0208/1481.html
+
+kill -s -9 pid号
+
+ps aux| grep 想杀死进程
+
+yum rpm包管理工具
+
+**ssh:notty**：被黑客暴力破解ssh
+
+https://blog.csdn.net/gammey/article/details/80404375
+
+lastb
+
+#### 1.conda 没法找到
+
+安装好了anaconda但是没办法用conda命令怎么办.
+
+```cmd
+step1: 查看环境变量 
+env
+step2: 添加环境变量
+export PATH=$PATH:/home/jingtian17/anaconda3
+用户名改成自己的 
+step3: 设置永久有效
+source ~/.bashrc
+如果不退出，这次设置的环境变量退出bash就没了
+```
+
+#### 2.jupyter 使用
+
+```cmd
+step1: 复制 url 到本机浏览器
+jupyter notebook   
+
+step2:本机
+ssh -N -L localhost:xxxx:localhost:xxxx username@223.3.89.188
+```
+
+#### 3.安装pytorch
+
+```cmd
+conda install pytorch torchvision cudatoolkit=10.0 -c pytorch
+```
+
+#### 4. 删除环境变量
+
+https://www.cnblogs.com/zhangwuji/p/7899075.html
+
+#### 5. Ubuntu下~/.bashrc文件的恢复方法
+
+2018年02月18日 17:33:38 [yucicheung](https://me.csdn.net/yucicheung) 阅读数 7886
+
+
+
+ 版权声明：如要转载，请在本帖的评论中声明，并且在转载后文章中保留原文链接。 https://blog.csdn.net/yucicheung/article/details/79334998
+
+##### 问题描述
+
+如果不小心在更改环境变量文件`~/.bashrc`时出现将文件内容覆盖的情况，比如`echo hello world > ~/.bashrc`没有使用添加模式而是覆盖模式． 
+**NOTE：非覆盖情况下，不推荐本文的方法．**
+
+##### 解决方案
+
+用系统中存储的`.bashrc`备份文件恢复到`~/`目录下，执行：
+
+```
+cp  /etc/skel/.bashrc   ~/1
+```
+
+其中，`/etc/skel`是Ubuntu的各种初始配置文件的存放目录.
+
 ### 9
 
 #### 1.conda 换源
