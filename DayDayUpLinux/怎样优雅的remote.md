@@ -4,13 +4,17 @@
 
 @github Oanakiaja
 
+---
+
+# 自己搞，（你们别搞，到时候弄冲突了，我懒得弄，讲的能用就行，下面是给你们想学学咋个完整自己弄的看的）
+
 ### **1.工具准备：**
 
 ​	method 1 :  vscode + Remote SSH ( SSH 要优雅的话需要把服务器公钥给服务器，否则一直叫输入密码很烦)
 
 ##### 	method 2 : pycharm remote + filezilla + jupyter notebook  +  nohup &  后台运行
 
-##### + （甚至您还可以进程管理( supervisor )）
+
 
 
 
@@ -68,6 +72,8 @@ jupyter notebook
 
 但是如果你这么做，关闭终端就没了
 
+（见环境不对bug ， 本文最后）
+
 所以我们有进阶方法1 :
 
 ```
@@ -89,7 +95,7 @@ nohup jupyter notebook &
 开命令行(管你是cmd 还是 powershell)
 
 ```
-ssh -N -L localhost:8889:loaclhost:8889 jingtian17@223.3.68.231
+ssh -N -L localhost:8888:loaclhost:8888 jingtian17@223.3.68.231
 ```
 
 输入密码就完事了
@@ -101,8 +107,12 @@ ssh -N -L localhost:8889:loaclhost:8889 jingtian17@223.3.68.231
 ![1569333228059](img/1569333228059.png)
 
 ```
-   http://localhost:8889/?token=31cee588b6ec78c9e6995550163b586e72f3e7e137dd1f80
+          http://localhost:8888/?token=3df6a508b597e670693030f1905929fee29210e8bbb24156
 ```
 
 按着来就行
+
+#### bug：自己把自己搞笑了
+
+把jupyter下载conda的base环境里面，用其他的环境 nohup 就不可以
 
