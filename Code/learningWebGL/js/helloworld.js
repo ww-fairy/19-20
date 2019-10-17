@@ -1,229 +1,102 @@
 main();
 
+	// 主程序入口
+	function main(){
+		var canvas = document.getElementById('glcanvas');
+    var context = canvas.getContext('webgl');
+    var VSHADER_SOURCE = 
+    `
+      attribute vec4 a_Position;
+      void main(){
+        gl_Position = a_Position;
+        gl_PointSize = 10.0;
+      }
+    `;
 
-function main() {
-  
-  // Initialize the GL context 
-  const canvas = document.querySelector("#glcanvas");
-  const gl = canvas.getContext("webgl");
-  if (!gl) {
-    alert("Unable to initialize WebGL. Your browser or machine may not support it.");
-    return;
+    // 片元着色器代码（给像素上色）
+    var FSHADER_SOURCE =
+    `
+      void main(){
+        gl_FragColor =  vec4(1.0, 0.0, 0.0, 1.0);
+      }
+    `;
+		var program = createProgram(context , VSHADER_SOURCE , FSHADER_SOURCE);
+		context.program = program;
+		context.useProgram(program);
+
+		var n = initVertexBuffers(context);
+
+    // var square = initSquare(context);
+		// 每一次重绘时的背景色
+  		context.clearColor(0.0, 0.0, 0.0, 1.0);
+
+		// 清除 <canvas>
+		context.clear(context.COLOR_BUFFER_BIT);
+
+		// 画n个点
+    context.drawArrays(context.TRIANGLE_FAN, 0, n);
+    // context.drawArrays(context.TRIANGLE_FAN,0,square);
   }
-
-  // Vertex shader program
-  const vsSource = `
-    attribute vec4 aVertexPosition;
-    uniform mat4 uModelViewMatrix;
-    uniform mat4 uProjectionMatrix;
-    void main() {
-      gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
-    }
-  `;
-  // Fragment shader program
-  const fsSource = `
-    void main() {
-      gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
-    }
-  `;
-
-  // Initialize a shader program; this is where all the lighting
-  // for the vertices and so forth is established.
-  const shaderProgram = initShaderProgram(gl, vsSource, fsSource);
-
-  // Collect all the info needed to use the shader program.
-  // Look up which attribute our shader program is using
-  // for aVertexPosition and look up uniform locations.
-  const programInfo = {
-    program: shaderProgram,
-    attribLocations: {
-      vertexPosition: gl.getAttribLocation(shaderProgram, 'aVertexPosition'),
-    },
-    uniformLocations: {
-      projectionMatrix: gl.getUniformLocation(shaderProgram, 'uProjectionMatrix'),
-      modelViewMatrix: gl.getUniformLocation(shaderProgram, 'uModelViewMatrix'),
-    },
-  };
-    // Here's where we call the routine that builds all the
-  // objects we'll be drawing.
-  const buffers = initBuffers(gl);
-
-  // Draw the scene
-  drawScene(gl, programInfo, buffers);
-}
-
-
-//
-// Initialize a shader program, so WebGL knows how to draw our data
-//
-function initShaderProgram(gl, vsSource, fsSource) {
-    const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
-    const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
   
-    // Create the shader program
-  
-    const shaderProgram = gl.createProgram();
-    gl.attachShader(shaderProgram, vertexShader);
-    gl.attachShader(shaderProgram, fragmentShader);
-    gl.linkProgram(shaderProgram);
-  
-    // If creating the shader program failed, alert
-  
-    if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
-      alert('Unable to initialize the shader program: ' + gl.getProgramInfoLog(shaderProgram));
-      return null;
-    }
-  
-    return shaderProgram;
-  }
+	function initVertexBuffers(context) {
+	  // 画n个点
+	  var n = 64;
+	  var vertices = new Float32Array(n*2);
+	  var angle = 0; // 开始的弧度
+	  var r = 0.5; // 圆的半径
+	  var stepAngle = 360/n * (Math.PI/180);
+	  for(var i=0; i<n*2; i+=2){
+	  	// 计算顶点x坐标
+	  	vertices[i] = r * Math.cos(angle);
+	  	// 计算顶点y坐标
+	  	vertices[i+1] = r * Math.sin(angle);
+	  	angle += stepAngle;
+	  }
 
-  //
-// creates a shader of the given type, uploads the source and
-// compiles it.
-//
-function loadShader(gl, type, source) {
-  const shader = gl.createShader(type);
+    const positions = [
+      1.0,  1.0,
+     -1.0,  1.0,
+      1.0, -1.0,
+     -1.0, -1.0,
+   ];
 
-  // Send the source to the shader object
+	  // 创建一个缓存对象，用于存放顶点数据
+	  var vertexBuffer = context.createBuffer();
+	  // 绑定缓存对象
+	  context.bindBuffer(context.ARRAY_BUFFER, vertexBuffer);
+	  // 把数据写到缓冲对象中
+    context.bufferData(context.ARRAY_BUFFER, vertices, context.STATIC_DRAW);
+    
+    context.bufferData(context.ARRAY_BUFFER,
+      new Float32Array(positions),
+      context.STATIC_DRAW);
 
-  gl.shaderSource(shader, source);
 
-  // Compile the shader program
 
-  gl.compileShader(shader);
+	  // 获取顶点着色器代码中的顶点变量
+	  var a_Position = context.getAttribLocation(context.program, 'a_Position');
+	  // // 设置变量获取数据规则
+	  context.vertexAttribPointer(a_Position, 2, context.FLOAT, false, 0, 0);
+	  // // 允许变量从 ARRAY_BUFFER目标上绑定的缓冲区对象获取数据
+	  context.enableVertexAttribArray(a_Position);
 
-  // See if it compiled successfully
+	  return n;
+	}
+	// 创建一个program（相当于着色器的上下文）
+	function createProgram(context, vshader, fshader){
+		var vertexShader = loadShader(context, context.VERTEX_SHADER, vshader);
+  		var fragmentShader = loadShader(context, context.FRAGMENT_SHADER, fshader);
+  		var program = context.createProgram();
+  		context.attachShader(program, vertexShader);
+  		context.attachShader(program, fragmentShader);
 
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    alert('An error occurred compiling the shaders: ' + gl.getShaderInfoLog(shader));
-    gl.deleteShader(shader);
-    return null;
-  }
+  		context.linkProgram(program);
+  		return program;
+	}	
+	function loadShader(context, type, source){
+		var shader = context.createShader(type);
+		context.shaderSource(shader, source);
+  		context.compileShader(shader);
+  		return shader;
+	}
 
-  return shader;
-}
-
-//
-// initBuffers
-//
-// Initialize the buffers we'll need. For this demo, we just
-// have one object -- a simple two-dimensional square.
-//
-function initBuffers(gl) {
-
-  // Create a buffer for the square's positions.
-
-  const positionBuffer = gl.createBuffer();
-
-  // Select the positionBuffer as the one to apply buffer
-  // operations to from here out.
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-
-  // Now create an array of positions for the square.
-
-  const positions = [
-     1.0,  1.0,
-    -1.0,  1.0,
-     1.0, -1.0,
-    -1.0, -1.0,
-  ];
-
-  // Now pass the list of positions into WebGL to build the
-  // shape. We do this by creating a Float32Array from the
-  // JavaScript array, then use it to fill the current buffer.
-
-  gl.bufferData(gl.ARRAY_BUFFER,
-                new Float32Array(positions),
-                gl.STATIC_DRAW);
-
-  return {
-    position: positionBuffer,
-  };
-}
-//
-// Draw the scene.
-//
-function drawScene(gl, programInfo, buffers) {
-  gl.clearColor(0.0, 0.0, 0.0, 1.0);  // Clear to black, fully opaque
-  gl.clearDepth(1.0);                 // Clear everything
-  gl.enable(gl.DEPTH_TEST);           // Enable depth testing
-  gl.depthFunc(gl.LEQUAL);            // Near things obscure far things
-
-  // Clear the canvas before we start drawing on it.
-
-  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-  // Create a perspective matrix, a special matrix that is
-  // used to simulate the distortion of perspective in a camera.
-  // Our field of view is 45 degrees, with a width/height
-  // ratio that matches the display size of the canvas
-  // and we only want to see objects between 0.1 units
-  // and 100 units away from the camera.
-
-  const fieldOfView = 45 * Math.PI / 180;   // in radians
-  const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
-  const zNear = 0.1;
-  const zFar = 100.0;
-  const projectionMatrix = mat4.create();
-
-  // note: glmatrix.js always has the first argument
-  // as the destination to receive the result.
-  mat4.perspective(projectionMatrix,
-                   fieldOfView,
-                   aspect,
-                   zNear,
-                   zFar);
-
-  // Set the drawing position to the "identity" point, which is
-  // the center of the scene.
-  const modelViewMatrix = mat4.create();
-
-  // Now move the drawing position a bit to where we want to
-  // start drawing the square.
-
-  mat4.translate(modelViewMatrix,     // destination matrix
-                 modelViewMatrix,     // matrix to translate
-                 [-0.0, 0.0, -6.0]);  // amount to translate
-
-  // Tell WebGL how to pull out the positions from the position
-  // buffer into the vertexPosition attribute.
-  {
-    const numComponents = 2;
-    const type = gl.FLOAT;
-    const normalize = false;
-    const stride = 0;
-    const offset = 0;
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
-    gl.vertexAttribPointer(
-        programInfo.attribLocations.vertexPosition,
-        numComponents,
-        type,
-        normalize,
-        stride,
-        offset);
-    gl.enableVertexAttribArray(
-        programInfo.attribLocations.vertexPosition);
-  }
-
-  // Tell WebGL to use our program when drawing
-
-  gl.useProgram(programInfo.program);
-
-  // Set the shader uniforms
-
-  gl.uniformMatrix4fv(
-      programInfo.uniformLocations.projectionMatrix,
-      false,
-      projectionMatrix);
-  gl.uniformMatrix4fv(
-      programInfo.uniformLocations.modelViewMatrix,
-      false,
-      modelViewMatrix);
-
-  {
-    const offset = 0;
-    const vertexCount = 4;
-    gl.drawArrays(gl.TRIANGLE_STRIP, offset, vertexCount);
-  }
-}

@@ -16,9 +16,13 @@
 
 **WebGL**
 
+* Code  learning webgl   绘制滑稽 
+  * （ 代码丑陋点 drawArray 一堆buffer 用offset控制就行
+  * （ 颜色数据类型 UByte
+
 #### 6.服务器部署(Done) 
 
-**Nginx、uwsgi、WSGI、Websocket、ASGI、Daphne、SSL**
+* **Nginx、uwsgi、WSGI、Websocket、ASGI、Daphne、SSL**
 
 #### 7.深度学习工具(ing)
 
