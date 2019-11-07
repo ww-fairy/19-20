@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="f4b5cb7f-bed6-4057-8302-9d797905fc37" name="SRTP" url="http://223.3.68.231">
+        <fileTransfer host="223.3.68.231" port="22" rootFolder="/home/jingtian17/githubrepo/SRTP" accessType="SFTP">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+          <option name="port" value="22" />
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>
