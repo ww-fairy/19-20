@@ -7,7 +7,7 @@
 
 from gym.envs.registration import register
 import num2words
-import asset_generator
+import environments.asset_generator
 import numpy as np
 
 MAX_EPISODE_STEPS_DICT = {
@@ -52,7 +52,7 @@ MULTI_TASK_DICT.update(ROBUSTNESS_TASK_DICT)
 name_list = []  # record all the environments available
 
 # register the transfer tasks
-for env_title, env in ROBUSTNESS_TASK_DICT.iteritems():
+for env_title, env in ROBUSTNESS_TASK_DICT.items():
 
     for i_env in env:
         file_name = 'environments.multitask_env.walkers:'
@@ -70,10 +70,10 @@ for env_title, env in ROBUSTNESS_TASK_DICT.iteritems():
         name_list.append(i_env)
 
 # register the robustness tasks
-for env in asset_generator.TASK_DICT:
+for env in environments.asset_generator.TASK_DICT:
     file_name = 'environments.transfer_env.' + env.lower() + '_env:'
 
-    for i_part in np.sort(asset_generator.TASK_DICT[env]):
+    for i_part in np.sort(environments.asset_generator.TASK_DICT[env]):
         # NOTE, the order in the name_list actually matters (needed during
         # transfer learning)
         registered_name = env + num2words.num2words(i_part)[0].upper() + \
@@ -231,8 +231,8 @@ def get_mujoco_model_settings():
         'Snake': ['qpos', 'qvel'],
         'Reacher': ['qpos', 'qvel', 'root_add_5']
     })
-    for env in asset_generator.TASK_DICT:
-        for i_part in asset_generator.TASK_DICT[env]:
+    for env in environments.asset_generator.TASK_DICT:
+        for i_part in environments.asset_generator.TASK_DICT[env]:
             registered_name = env + num2words.num2words(i_part)[0].upper() \
                 + num2words.num2words(i_part)[1:] + '-v1'
 

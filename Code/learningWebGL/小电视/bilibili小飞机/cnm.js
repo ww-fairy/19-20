@@ -82,7 +82,23 @@ console.log(bilibili2_obj)
 console.log(bilibili2_vertices)
 bilibili2_convertData()
 
+// 地图和天空
+var ground_obj = new Object();
+ground_obj.vertexBuffer = gl.createBuffer()
+ground_obj.indexBuffer = gl.createBuffer()
+ground_obj.colorBuffer = gl.createBuffer()
+var ground_center = [0,0,0]
+var gournd_fieldOfViewRadians = degToRad(100);
+
+ground_colors = [];
+ground_vertices = [];
+ground_faces = [];
+
+
+
 drawSceneIndex();
+
+
 
 
 

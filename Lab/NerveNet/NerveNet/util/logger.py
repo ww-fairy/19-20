@@ -23,19 +23,19 @@ class _MyFormatter(logging.Formatter):
     '''
 
     def format(self, record):
-        date = colored('[%(asctime)s @%(filename)s:%(lineno)d]', 'green')
+        # date = colored('[%(asctime)s @%(filename)s:%(lineno)d]', 'green')
         msg = '%(message)s'
 
         if record.levelno == logging.WARNING:
-            fmt = date + ' ' + \
-                colored('WRN', 'red', attrs=[]) + ' ' + msg
+            # fmt = date + ' ' + \
+            fmt =  colored('WRN', 'red', attrs=[]) + ' ' + msg
         elif record.levelno == logging.ERROR or \
                 record.levelno == logging.CRITICAL:
-            fmt = date + ' ' + \
-                colored('ERR', 'red', attrs=['underline']) + ' ' + msg
+            # fmt = date + ' ' + \
+            fmt =   colored('ERR', 'red', attrs=['underline']) + ' ' + msg
         else:
-            fmt = date + ' ' + msg
-
+            # fmt = date + ' ' + msg
+            fmt = msg
         if hasattr(self, '_style'):
             # Python3 compatibilty
             self._style._fmt = fmt
@@ -50,17 +50,18 @@ _logger.setLevel(logging.INFO)
 
 # set the console output handler
 con_handler = logging.StreamHandler(sys.stdout)
-con_handler.setFormatter(_MyFormatter(datefmt='%m%d %H:%M:%S'))
+#con_handler.setFormatter(_MyFormatter(datefmt='%m%d %H:%M:%S'))
 _logger.addHandler(con_handler)
 
 
 # set the file output handler
-def set_file_handler(path=None, prefix='', time_str=''):
-    if time_str == '':
-        file_name = prefix + \
-            datetime.datetime.now().strftime("%A_%d_%B_%Y_%I:%M%p") + '.log'
-    else:
-        file_name = prefix + time_str + '.log'
+def set_file_handler(path=None, prefix='', ):#time_str=''):
+    # if time_str == '':
+        # file_name = prefix + \
+            # datetime.datetime.now().strftime("%A_%d_%B_%Y_%I:%M%p") + '.log'
+    # else:
+        # file_name = prefix + time_str + '.log'
+    file_name = prefix  + '.log'
 
     if path is None:
         mod = sys.modules['__main__']

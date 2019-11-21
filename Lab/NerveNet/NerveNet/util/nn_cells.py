@@ -66,7 +66,10 @@ def weight_variable(shape,
         )
     else:
         raise ValueError("Unsupported initialization method!")
-
+    import numpy as np
+    shape = np.array(shape)
+    shape.dtype = "int32"
+    shape = shape.tolist()
     var = tf.Variable(initializer(shape), name=name, trainable=trainable)
 
     if wd:

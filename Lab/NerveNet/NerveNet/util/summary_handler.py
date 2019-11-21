@@ -36,7 +36,9 @@ class summary_handler(object):
 
         if not os.path.exists(self.path):
             os.makedirs(self.path)
-        self.path = os.path.join(self.path, summary_name)
+        
+        # 总是会带：让windows不能创建
+        # self.path = os.path.join(self.path, summary_name)
 
         self.train_writer = tf.summary.FileWriter(self.path, self.sess.graph)
 

@@ -17,7 +17,7 @@ from util import model_saver
 from util import parallel_util
 import os
 from util import summary_handler
-from agent import base_agent
+from agent.agent import base_agent
 from graph_util import graph_data_util
 
 
@@ -27,7 +27,7 @@ class optimization_agent(base_agent):
             @necessary components:
                 def __init__(self, args, observation_size, action_size, task_q,
                              result_q, name_scope='trpo_agent')
-                gef run(self)
+                def run(self)
 
             @build models:
                 def build_models(self)
@@ -95,12 +95,19 @@ class optimization_agent(base_agent):
         '''
         self.build_models()
 
+        '''
+        加载预训练数据
+        '''
         # load the model if needed
         if self.args.ckpt_name is not None:
             self.restore_all()
 
         # the main training process
         while True:
+            
+            '''
+            拿到learning task
+            '''
             next_task = self.task_q.get()
 
             # Kill the learner
@@ -120,6 +127,10 @@ class optimization_agent(base_agent):
                     paths = next_task
 
                     paths.pop()
+                    
+                    '''
+                     拿到 训练好的数据输出
+                    '''
                     episoderewards = np.array(
                         [path["rewards"].sum() for path in paths]
                     )
@@ -168,7 +179,7 @@ class optimization_agent(base_agent):
         # set the summary writer
         self.summary_writer = summary_handler.gym_summary_handler(
             self.session, self.get_experiment_name(),
-            enable=self.args.write_summary, summary_dir=self.args.output_dir
+            enable=self.args.write_summary, summary_dir='1115'#self.args.output_dir
         )
 
         # build the policy network and baseline network

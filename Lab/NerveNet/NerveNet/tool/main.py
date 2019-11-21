@@ -14,39 +14,65 @@ import time
 from environments import register
 init_path.bypass_frost_warning()
 
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
+import tensorflow as tf
+
+
+#python main.py --task CentipedeSix-v1 --use_gnn_as_policy 0 --num_threads 4 --ckpt_name ../checkpoint/centipede/fc/6 --mlp_raw_transfer 1  --test 100
 if __name__ == '__main__':
     # get the configuration
     logger.info('New environments available : {}'.format(
         register.get_name_list()))
     args = get_config()
     # 选择 agent  CentipedeSix-v1
-    args.max_pathlength = gym.spec(args.task).timestep_limit
+    # args.max_pathlength = gym.spec(args.task).timestep_limit
+    args.max_pathlength = gym.make(args.task).spec.timestep_limit # = 1000 动1000步
+    '''
+    创建一种环境， 这个根据自己给的东西决定
+    '''
     learner_env = gym.make(args.task)
-
+    '''
+    要写出的话，写出的位置和名称
+    '''
     if args.write_log:
         logger.set_file_handler(
             path=args.output_dir,
-            prefix='mujoco_' + args.task, time_str=args.time_id
+            prefix='mujoco_' + args.task #time_str=args.time_id
         )
 
+    '''
+    learner_agent   设置agent  详情看 learneragent的 optimization和 base_agent
+    '''
     learner_tasks = multiprocessing.JoinableQueue()
     learner_results = multiprocessing.Queue()
+    print(str(learner_env.observation_space.shape[0]))
+    print(str(learner_env.action_space.shape[0]))
     learner_agent = optimization_agent.optimization_agent(
         args,
-        learner_env.observation_space.shape[0],
-        learner_env.action_space.shape[0],
+        learner_env.observation_space.shape[0],  # 139
+        learner_env.action_space.shape[0],       #  16
         learner_tasks,
         learner_results
     )
+    # 多线程的start 方法。 这里为啥用多线程
+
     learner_agent.start()
 
     # the rollouts agents
+
+    '''
+    首次展示的agent，看了下参数设置，都是普通的设置，为啥这么普通啊？
+    '''
     rollout_agent = rollout_master_agent.parallel_rollout_master_agent(
         args,
         learner_env.observation_space.shape[0],
         learner_env.action_space.shape[0]
     )
 
+    '''
+    我又不懂了，learner_tasks, put了一个 1 进去  ？？？？？
+    '''
     # start the training and rollouting process
     learner_tasks.put(parallel_util.START_SIGNAL)
     learner_tasks.join()
@@ -56,14 +82,18 @@ if __name__ == '__main__':
     # some training stats
     start_time = time.time()
     totalsteps = 0
-
+    
     while True:
 
         # runs a bunch of async processes that collect rollouts
+        learner_env.render()
+        
         rollout_start = time.time()
         paths = rollout_agent.rollout()
         rollout_time = (time.time() - rollout_start) / 60.0
 
+        
+        
         learn_start = time.time()
         learner_tasks.put(paths)
         learner_tasks.join()
@@ -73,7 +103,7 @@ if __name__ == '__main__':
 
         # update the policy
         rollout_agent.set_policy_weights(results['policy_weights'])
-
+        
         logger.info(
             "------------- Iteration %d --------------" % results['iteration']
         )

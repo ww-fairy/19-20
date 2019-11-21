@@ -36,6 +36,7 @@ class base_agent(multiprocessing.Process):
 
         # the network parameters
         self.name_scope = name_scope
+        # 
         self.observation_size = observation_size
         self.action_size = action_size
 

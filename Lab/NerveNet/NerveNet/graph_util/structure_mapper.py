@@ -7,9 +7,9 @@
 
 import init_path
 from util import logger
-import mujoco_parser
+import graph_util.mujoco_parser
 import numpy as np
-
+import graph_util.mujoco_parser
 
 _BASE_DIR = init_path.get_base_dir()
 
@@ -120,14 +120,14 @@ def map_transfer_env_running_mean(ienv, oenv, running_mean_info,
                                   gnn_output_option, gnn_embedding_option):
 
     # parse the mujoco information
-    ienv_info = mujoco_parser.parse_mujoco_graph(
+    ienv_info = graph_util.mujoco_parser.parse_mujoco_graph(
         ienv,
         gnn_node_option=gnn_node_option,
         root_connection_option=root_connection_option,
         gnn_output_option=gnn_output_option,
         gnn_embedding_option=gnn_embedding_option
     )
-    oenv_info = mujoco_parser.parse_mujoco_graph(
+    oenv_info = graph_util.mujoco_parser.parse_mujoco_graph(
         oenv,
         gnn_node_option=gnn_node_option,
         root_connection_option=root_connection_option,
@@ -146,7 +146,7 @@ def map_transfer_env_running_mean(ienv, oenv, running_mean_info,
     }
     ienv_node_name_list = [node['name'] for node in ienv_info['tree']]
 
-    for node, oenv_digit in oenv_info['input_dict'].iteritems():
+    for node, oenv_digit in oenv_info['input_dict'].items():
         node_name = oenv_info['tree'][node]['name']
         # if the node is alreay in the input environment?
         if node_name in ienv_node_name_list:

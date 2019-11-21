@@ -10,7 +10,7 @@
 
 import init_path
 from util import logger
-import mujoco_parser
+import graph_util.mujoco_parser
 import numpy as np
 
 
@@ -135,10 +135,10 @@ def get_inverse_type_offset(node_info, mode):
 
 def get_receive_send_idx(node_info):
     # register the edges that shows up, get the number of edge type
-    edge_dict = mujoco_parser.EDGE_TYPE
+    edge_dict = graph_util.mujoco_parser.EDGE_TYPE
     edge_type_list = []  # if one type of edge exist, register
 
-    for edge_id in edge_dict.itervalues():
+    for edge_id in edge_dict.values():
         if edge_id == 0:
             continue  # the self loop is not considered here
         if (node_info['relation_matrix'] == edge_id).any():
