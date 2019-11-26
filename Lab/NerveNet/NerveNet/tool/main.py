@@ -71,7 +71,7 @@ if __name__ == '__main__':
     )
 
     '''
-    我又不懂了，learner_tasks, put了一个 1 进去  ？？？？？
+ 
     '''
     # start the training and rollouting process
     learner_tasks.put(parallel_util.START_SIGNAL)
@@ -91,8 +91,6 @@ if __name__ == '__main__':
         rollout_start = time.time()
         paths = rollout_agent.rollout()
         rollout_time = (time.time() - rollout_start) / 60.0
-
-        
         
         learn_start = time.time()
         learner_tasks.put(paths)
