@@ -76,7 +76,7 @@ cp  /etc/skel/.bashrc   ~/1
 
 其中，`/etc/skel`是Ubuntu的各种初始配置文件的存放目录.
 
-### 9
+### 9月
 
 #### 1.conda 换源
 
@@ -148,3 +148,238 @@ https://www.cnblogs.com/yhjoker/p/10972795.html
 #### 6. deb 安装
 
 dpkg -i 安装包名字
+
+
+
+### 12月
+
+此月都是关于**网络运维**方面，为什么？ 因为上了门课，讲网络运维的linux
+
+
+
+#### 1.LAMP (linux + Apache + MySQL + PHP/Perl/Python)
+
+```
+sudo apt update
+sudo apt upgrade 
+sudo apt install lamp-server^
+```
+
+#### 2.man
+
+manual 查看指令的含义
+
+```
+man [section number] [命令名称]
+```
+
+![1576052032626](每天学点Linux.assets/1576052032626.png)
+
+man关键字查询
+
+```
+man -k user  
+```
+
+#### 3. users and groups
+
+添加、删除用户
+
+```
+sudo useradd testuser
+sudo userdel testuser
+```
+
+![1576052278249](每天学点Linux.assets/1576052278249.png)
+
+执行sh文件的时候， 注意给 chmod +x 加权限直接运行
+
+添加组
+
+```
+sudo addgroup shark
+sudo usermod -a -G shark test3
+```
+
+
+
+/etc/passwd
+
+/etc/group
+
+
+
+#### 4.head、tail、less 、more、cat、grep
+
+都是查看文本的方法
+
+Linux more 命令类似 cat ，不过会以一页一页的形式显示，更方便使用者逐页阅读，而最基本的指令就是按空白键（space）就往下一页显示，按 b 键就会往回（back）一页显示，而且还有搜寻字串的功能（与 vi 相似），使用中的说明文件，请按 h 。
+
+#### 5. crontab
+
+定时器
+
+编辑 
+
+```
+crontab -u oana -e
+
+* * * * * grep xxxxxx 命令
+分时日月周
+```
+
+list cron jobs
+
+```
+crontab -u oana -l
+```
+
+
+
+#### 6.ifconfig
+
+查看网络信息
+
+#### 7. chown \ chmod
+
+ 归属组 和 赋予权限
+
+#### 8.tr
+
+```
+tr l L < /etc/hosts
+```
+
+临时把 /etc/hosts 中的小写字母换成大写
+
+#### 9. <   >  >>  |
+
+```
+< 引入
+> 覆盖
+>> 追加
+| 管道
+```
+
+
+
+#### 10. time zone
+
+查看时间
+
+```
+date
+```
+
+查看时区
+
+```
+more /etc/timezone
+```
+
+查看可用时区
+
+```
+timedatectl list-timezones
+```
+
+设置时区
+
+```
+sudo timedatectl set-timezone Asia/Shanghai
+```
+
+查看system time  status
+
+```
+timedatectl status
+```
+
+查看远程linux 的status
+
+```
+timedatectl -H oana@desktopIp status
+```
+
+cron
+
+```
+sudo service cron restart
+```
+
+#### 11.arp 协议 和抓包
+
+arp 协议
+
+```
+arp
+```
+
+ 通过ip地址存储 MAC 地址的 cache
+
+![1576054666014](每天学点Linux.assets/1576054666014.png)
+
+删除 cache
+
+```
+arp -d ipnumber
+```
+
+tcpdump ctl抓包
+
+命令行抓包工具
+
+```
+sudo tcpdump -c 4 "icmp or arp" -q
+```
+
+然后在其他电脑上 ping 就可以抓到了
+
+详情自己学习 tcpdump
+
+wireshark 抓包
+
+wireshark如果要获得所有的interface
+
+```																																																																																																																				
+sudo wireshark &
+```
+
+& 是把GUI放在最前面
+
+#### 12. ip 设置
+
+图形界面，网络上手动设置
+
+![1576055853511](每天学点Linux.assets/1576055853511.png)
+
+```/var/log/apache2/access.log``` 为 dokuwiki 的get、post 的log
+
+**wc -l**
+
+```
+grep "GET /dokuwiki" access.log | wc-l
+```
+
+#### 13. 设置硬件时钟和系统时钟一致
+
+ntp server
+
+#### 14. 获得字段的piece
+
+**awk -F[符号]  '{print $1 , \$3}'**
+
+```
+grep ^[aeiou] /etc/passwd | awk -F: '{print $1, $3}' | sort -u
+```
+
+#### 15. sort -u 
+
+按照字典正序排序
+
+#### 16.logger [options] [messages]
+
+直接控制 /var/log/syslog 文件 
+
+log --tag tag messages
+

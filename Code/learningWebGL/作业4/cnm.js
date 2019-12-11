@@ -2,15 +2,37 @@
 var BILIBILI_VERTEX_SHADER_SOURCE =
   `
 attribute vec4 a_position;
+attribute vec3 a_normal;
 attribute vec4 a_color;
 
-uniform mat4 u_matrix;
+
+uniform vec3 u_lightWorldPosition;
+uniform vec3 u_viewWorldPosition;
+
+uniform mat4 u_world;
+uniform mat4 u_worldViewProjection;
+uniform mat4 u_worldInverseTranspose;
+
 
 varying vec4 v_color;
+varying vec3 v_normal;
+
+varying vec3 v_surfaceToLight; 
+varying vec3 v_surfaceToView;
 
 void main() {
-  gl_Position = u_matrix * a_position;
+  gl_Position = u_worldViewProjection * a_position;
+  v_normal = mat3(u_worldInverseTranspose) * a_normal;
   v_color = a_color;
+
+   
+  // 计算表面的世界坐标
+  vec3 surfaceWorldPosition = (u_world * a_position).xyz;
+  // 计算表面到光源的方向
+  // 传递给片断着色器
+  v_surfaceToLight = u_lightWorldPosition - surfaceWorldPosition;
+
+  v_surfaceToView = normalize(u_viewWorldPosition - surfaceWorldPosition);
 }
 `;
 // fragment shader
@@ -18,30 +40,77 @@ var BILIBILI_FRAGMENT_SHADER_SOURCE =
   `
 precision mediump float;
 
+varying vec3 v_normal;
 varying vec4 v_color;
+varying vec3 v_surfaceToLight;
+
+varying vec3 v_surfaceToView;
+uniform float u_shininess;
+uniform vec3 u_lightColor;
+uniform vec3 u_specularColor;
+
+
 
 void main()
 {
-   gl_FragColor = v_color;
+  // 由于 v_normal 是插值出来的，和有可能不是单位向量，
+  // 可以用 normalize 将其单位化。
+  vec3 normal = normalize(v_normal);
+
+  vec3 surfaceToLightDirection = normalize(v_surfaceToLight);
+  vec3 surfaceToViewDirection = normalize(v_surfaceToView);
+  vec3 halfVector = normalize(surfaceToLightDirection + surfaceToViewDirection);
+
+  float light = dot(normal, surfaceToLightDirection);
+  float specular = 0.0;
+  if (light > 0.0) {
+    specular = pow(dot(normal, halfVector), u_shininess);
+  }
+
+  gl_FragColor = v_color;
+
+  gl_FragColor.rgb *= light * u_lightColor;
+  gl_FragColor.rgb += specular * u_specularColor;
+
 }
 `;
 var canvas = document.getElementById("canvas");
 var gl = canvas.getContext('webgl');
 var program = createProgram(gl, BILIBILI_VERTEX_SHADER_SOURCE, BILIBILI_FRAGMENT_SHADER_SOURCE)
+  // look up where the vertex data needs to go.
+  var positionLocation = gl.getAttribLocation(program, "a_position");
+  var normalLocation = gl.getAttribLocation(program, "a_normal");
+  var colorLocation = gl.getAttribLocation(program, "a_color");
+  // lookup uniforms
+  var worldViewProjectionLocation = gl.getUniformLocation(program, "u_worldViewProjection");
+  var worldInverseTransposeLocation = gl.getUniformLocation(program, "u_worldInverseTranspose");
+  var shininessLocation = gl.getUniformLocation(program, "u_shininess");
+  var lightWorldPositionLocation =
+      gl.getUniformLocation(program, "u_lightWorldPosition");
+  var viewWorldPositionLocation =
+      gl.getUniformLocation(program, "u_viewWorldPosition");
+  var worldLocation =
+      gl.getUniformLocation(program, "u_world");
+  var lightColorLocation =
+      gl.getUniformLocation(program, "u_lightColor");
+  var specularColorLocation =
+      gl.getUniformLocation(program, "u_specularColor");
 
-var positionLocation = gl.getAttribLocation(program, "a_position");
-var colorLocation = gl.getAttribLocation(program, "a_color");
-var matrixLocation = gl.getUniformLocation(program, "u_matrix");
-gl.clearColor(1, 192/255, 203/255, 1.0)
+
+  gl.clearColor(1, 1,1, 1.0)
 
 //camera
 var cameraAngleRadians = degToRad(0);
 
+
+
+
 //bilibili
 var bilibili_obj = new Object();
 bilibili_obj.vertexBuffer = gl.createBuffer();
-bilibili_obj.indexBuffer = gl.createBuffer();
+// bilibili_obj.indexBuffer = gl.createBuffer();
 bilibili_obj.colorBuffer = gl.createBuffer();
+bilibili_obj.normalBuffer = gl.createBuffer();
 
 var bilibili_center = [150,110,50];
 var bilibili_directZ = [0, 0, 1, 1];
@@ -51,20 +120,27 @@ var bilibili_directZR = [0, 0, 1, 1];
 var bilibili_translation = [100, 0, -600];
 var bilibili_rotation = [degToRad(0), degToRad(0), degToRad(0)];
 var bilibili_scale = [1, 1, 1];
-var bilibili_fieldOfViewRadians = degToRad(80);
+var bilibili_fieldOfViewRadians = degToRad(100);
 
 bilibili_colors = [];
 bilibili_vertices = [];
 bilibili_faces = [];
 drawbilibili();
+bilibili_array = []
+bilibili_array_colors = []
+bilibili_normal = []
+bilibili_array = getArray(bilibili_vertices, bilibili_faces)
+bilibili_array_colors = getArrayColors(bilibili_colors,bilibili_faces)
+bilibili_normal = computeNormalVector(bilibili_vertices, bilibili_faces)
 bilibili_convertData()
+console.log(bilibili_obj)
 
 //bilibili2
 var bilibili2_obj = new Object();
 bilibili2_obj.vertexBuffer = gl.createBuffer();
 bilibili2_obj.indexBuffer = gl.createBuffer();
 bilibili2_obj.colorBuffer = gl.createBuffer();
-
+bilibili2_obj.normalBuffer = gl.createBuffer();
 //  160,146,100
 var bilibili2_center = [0,0,0];
 var bilibili2_directZ = [1, 0, 0, 1];
@@ -74,19 +150,21 @@ var bilibili2_directZR = [0, 0, 1, 1];
 var bilibili2_translation = [-300, 75, -600];
 var bilibili2_rotation = [degToRad(0), degToRad(0), degToRad(0)];
 var bilibili2_scale = [1, 1, 1];
-var bilibili2_fieldOfViewRadians = degToRad(80);
+var bilibili2_fieldOfViewRadians = degToRad(60);
 
 bilibili2_colors = [];
 bilibili2_vertices = [];
 bilibili2_faces = [];
 drawbilibili2()
+bilibili2_normal = computeAvgNormalVector(bilibili2_vertices,bilibili2_faces)
 bilibili2_convertData()
 
 //地图和天空
 var ground_obj = new Object();
 ground_obj.vertexBuffer = gl.createBuffer()
-ground_obj.indexBuffer = gl.createBuffer()
+// ground_obj.indexBuffer = gl.createBuffer()
 ground_obj.colorBuffer = gl.createBuffer()
+ground_obj.normalBuffer = gl.createBuffer()
 var ground_center = [0,0,0];
 var ground_directZ = [1, 0, 0, 1];
 var ground_directXR = [1, 0, 0, 1];
@@ -95,13 +173,39 @@ var ground_directZR = [0, 0, 1, 1];
 var ground_translation = [0, 0, -600];
 var ground_rotation = [degToRad(0), degToRad(0), degToRad(0)];
 var ground_scale = [1, 1, 1];
-var ground_fieldOfViewRadians = degToRad(80);
+var ground_fieldOfViewRadians = degToRad(60);
 
 ground_colors = [];
 ground_vertices = [];
 ground_faces = [];
 drawground()
+ground_array = []
+ground_array_colors = []
+ground_normal = []
+ground_array = getArray(ground_vertices, ground_faces)
+ground_array_colors = getArrayColors(ground_colors,ground_faces)
+ground_normal = computeNormalVector(ground_vertices, ground_faces)
 ground_convertDate()
+
+// 光线
+var light_obj = new Object()
+light_obj.vertexBuffer = gl.createBuffer()
+light_obj.colorBuffer = gl.createBuffer()
+light_obj.normalBuffer = gl.createBuffer()
+// light_transfer 用 light_pos
+var light_fieldOfViewRadians = degToRad(60);
+light_colors = [];
+light_vertices = [];
+light_faces = [];
+drawlight()
+light_array = []
+light_array_colors = []
+light_normal = []
+light_array = getArray(light_vertices, light_faces)
+light_array_colors = getArrayColors(light_colors,light_faces)
+light_normal = computeNormalVector(light_vertices, light_faces)
+light_convertDate()
+
 
 
 // drawSceneIndex();
@@ -117,9 +221,14 @@ ground_convertDate()
  var requestAnimationid2 = 1;  // 用来删除动画
  var isAlive = true;  // 是否在动
  var forward = true; //向前跳
+ var light_pos =[-289,300,-120]
+ var shininess = 150;
+ 
+
+
+
  var tick1 = function () {
   cameraAngleRadians = animateCamera(cameraAngleRadians);  // Update the rotation angle
-  animateBilibili()
   requestAnimationid = requestAnimationFrame(tick1, canvas); // Request that the 
   drawSceneIndex();
 };
@@ -130,7 +239,8 @@ var tick2 = function () {
   drawSceneIndex(); // Draw the trianglebrowser ?calls tick
 };
 tick1();
-// tick2();
+tick2();
+
 
 function animateCamera(angle) {
   // Calculate the elapsed time
@@ -194,12 +304,10 @@ function animateBilibili(){
   bilibili2_translation[0] += 7 * bilibili2_directZ[0];
   bilibili2_translation[1] += 7 * bilibili2_directZ[1];
   bilibili2_translation[2] += 7 * bilibili2_directZ[2];
-  console.log( bilibili2_translation[2])
   }else{
   bilibili2_translation[0] += 7 * bilibili2_directZ[0];
   bilibili2_translation[1] += 7 * bilibili2_directZ[1];
   bilibili2_translation[2] += 7 * bilibili2_directZ[2];
-  console.log( bilibili2_translation[2])
   }
   if(bilibili2_translation[2]>=-200)
   {
@@ -219,19 +327,24 @@ function animateBilibili(){
 }  
 
 
-
-
-
-
 function bilibili_convertData() {
   gl.bindBuffer(gl.ARRAY_BUFFER, bilibili_obj.vertexBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(bilibili_vertices), gl.STATIC_DRAW);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(bilibili_array), gl.STATIC_DRAW);
 
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bilibili_obj.indexBuffer);
-  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(bilibili_faces), gl.STATIC_DRAW);
+  // gl.bindBuffer(gl.ARRAY_BUFFER, bilibili_obj.vertexBuffer);
+  // gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(bilibili_vertices), gl.STATIC_DRAW);
+
+  // gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bilibili_obj.indexBuffer);
+  // gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(bilibili_faces), gl.STATIC_DRAW);
+
+  // gl.bindBuffer(gl.ARRAY_BUFFER, bilibili_obj.colorBuffer);
+  // gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(bilibili_colors), gl.STATIC_DRAW);
 
   gl.bindBuffer(gl.ARRAY_BUFFER, bilibili_obj.colorBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(bilibili_colors), gl.STATIC_DRAW);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(bilibili_array_colors), gl.STATIC_DRAW);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, bilibili_obj.normalBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(bilibili_normal), gl.STATIC_DRAW)
 }
 function bilibili2_convertData() {
   gl.bindBuffer(gl.ARRAY_BUFFER, bilibili2_obj.vertexBuffer);
@@ -242,16 +355,39 @@ function bilibili2_convertData() {
 
   gl.bindBuffer(gl.ARRAY_BUFFER, bilibili2_obj.colorBuffer);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(bilibili2_colors), gl.STATIC_DRAW);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, bilibili2_obj.normalBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(bilibili2_normal), gl.STATIC_DRAW)
 }
 function ground_convertDate() {
   gl.bindBuffer(gl.ARRAY_BUFFER, ground_obj.vertexBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(ground_vertices), gl.STATIC_DRAW);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(ground_array), gl.STATIC_DRAW);
 
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ground_obj.indexBuffer);
-  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(ground_faces), gl.STATIC_DRAW);
+  // gl.bindBuffer(gl.ARRAY_BUFFER, ground_obj.vertexBuffer);
+  // gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(ground_vertices), gl.STATIC_DRAW);
+
+  // gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ground_obj.indexBuffer);
+  // gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(ground_faces), gl.STATIC_DRAW);
+
+  // gl.bindBuffer(gl.ARRAY_BUFFER, ground_obj.colorBuffer);
+  // gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(ground_colors), gl.STATIC_DRAW);
 
   gl.bindBuffer(gl.ARRAY_BUFFER, ground_obj.colorBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(ground_colors), gl.STATIC_DRAW);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(ground_array_colors), gl.STATIC_DRAW);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, ground_obj.normalBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(ground_normal), gl.STATIC_DRAW)
+}
+
+function light_convertDate() {
+  gl.bindBuffer(gl.ARRAY_BUFFER, light_obj.vertexBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(light_array), gl.STATIC_DRAW);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, light_obj.colorBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(light_array_colors), gl.STATIC_DRAW);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, light_obj.normalBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(light_normal), gl.STATIC_DRAW)
 }
 
 
@@ -263,48 +399,474 @@ function degToRad(d) {
   return d * Math.PI / 180;
 }
 
-// // 设置UI
 
+
+function drawSceneIndex() {
+  webglUtils.resizeCanvasToDisplaySize(gl.canvas);
+  gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.CULL_FACE);
+  gl.enable(gl.DEPTH_TEST);
+  gl.useProgram(program);
+  gl.clearColor(0.5, 0.5,0.5, 1.0)
+
+
+  // set the light direction.
+  // gl.uniform3fv(reverseLightDirectionLocation, m4.normalize([0.5, 0.7, 1]));
+  gl.uniform3fv(lightWorldPositionLocation, light_pos);
+
+  gl.enableVertexAttribArray(positionLocation);
+  gl.bindBuffer(gl.ARRAY_BUFFER, bilibili_obj.vertexBuffer);
+  var size = 3;
+  var type = gl.FLOAT;
+  var normalize = false;
+  var stride = 0;
+  var offset = 0;
+  gl.vertexAttribPointer(positionLocation, size, type, normalize, stride, offset);
+
+  // 顶点normalbuffer
+  gl.enableVertexAttribArray(normalLocation);
+    gl.bindBuffer(gl.ARRAY_BUFFER, bilibili_obj.normalBuffer);
+    var size = 3;          // 3 components per iteration
+    var type = gl.FLOAT;   // the data is 32bit floating point values
+    var normalize = false; // normalize the data (convert from 0-255 to 0-1)
+    var stride = 0;        // 0 = move forward size * sizeof(type) each iteration to get the next position
+    var offset = 0;        // start at the beginning of the buffer
+    gl.vertexAttribPointer(
+        normalLocation, size, type, normalize, stride, offset);
+
+  // 顶点颜色buffer
+  gl.enableVertexAttribArray(colorLocation);
+  gl.bindBuffer(gl.ARRAY_BUFFER, bilibili_obj.colorBuffer);
+  var size = 3;
+  var type = gl.FLOAT;
+  var normalize = false;         // normalize the data (convert from 0-255 to 0-1)
+  var stride = 0;
+  var offset = 0;
+  gl.vertexAttribPointer(colorLocation, size, type, normalize, stride, offset);
+
+  // 计算图像转换
+  var aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+  var zNear = 1;
+  var zFar = 2000;
+  var perMatrix = m4.perspective(bilibili_fieldOfViewRadians, aspect, zNear, zFar);
+  
+  // 相机
+  var radius = 250;
+  var fPosition = [radius, 0, 0];
+  camera_translation = [-150, 0 , -600];
+
+  camerachangeMatrix = m4.translation(camera_translation[0],camera_translation[1],camera_translation[2])
+  var cameraMatrix = m4.yRotation(cameraAngleRadians);
+  cameraMatrix = m4.translate(cameraMatrix, 250, 200, radius * 1.5);
+  var cameraPosition = [
+    cameraMatrix[12],
+    cameraMatrix[13],
+    cameraMatrix[14],
+  ];
+  var up = [0, 1, 0];
+  var cameraMatrix = m4.lookAt(cameraPosition, fPosition, up);
+  cameraunchangeMatrix = m4.translation(-camera_translation[0],-camera_translation[1],-camera_translation[2])
+  cameraMatrix = m4.multiply(m4.multiply(camerachangeMatrix,cameraMatrix),cameraunchangeMatrix);
+  var viewMatrix = m4.inverse(cameraMatrix);
+  var viewProjectionMatrix = m4.multiply(perMatrix, viewMatrix);
+
+
+  changeMatrix = m4.translation(bilibili_center[0],bilibili_center[1],bilibili_center[2])
+  var T = m4.translation(bilibili_translation[0], bilibili_translation[1], bilibili_translation[2]);
+  var Rx = m4.axisRotation([1,0,0,1],bilibili_rotation[0]);
+  var Ry = m4.axisRotation([0,1,0,1],bilibili_rotation[1]);
+  var Rz = m4.axisRotation([0,0,1,1],bilibili_rotation[2]);
+  var S = m4.scaling(bilibili_scale[0], bilibili_scale[1], bilibili_scale[2]);
+  unchangeMatrix = m4.translation(-bilibili_center[0],-bilibili_center[1],-bilibili_center[2])
+  mvMatrix =  m4.multiply(m4.multiply( m4.multiply( m4.multiply( m4.multiply(m4.multiply(changeMatrix,T),Rx),Ry),Rz),S),unchangeMatrix);
+
+  matrix = m4.multiply(viewProjectionMatrix,mvMatrix);
+  var worldInverseMatrix = m4.inverse(matrix)
+  var worldInverseTransposeMatrix = m4.transpose(worldInverseMatrix)
+
+      // Set the matrices
+  gl.uniformMatrix4fv(worldViewProjectionLocation, false, matrix);
+  gl.uniformMatrix4fv(worldInverseTransposeLocation, false, worldInverseTransposeMatrix);
+  gl.uniformMatrix4fv(worldLocation,false, mvMatrix)
+
+    // set the camera/view position
+    gl.uniform3fv(viewWorldPositionLocation, cameraPosition);
+    // set the shininess
+    gl.uniform1f(shininessLocation, shininess);
+    // set the light color    
+    gl.uniform3fv(lightColorLocation, m4.normalize([1, 1, 1]));  // red light
+    // set the specular color
+    gl.uniform3fv(specularColorLocation, m4.normalize([1, 1, 1]));  // red light
+
+
+
+  bilibili_directZ = [0,0,1,1];
+  bilibili_directZ = m4.transformNormal(mvMatrix,bilibili_directZ);
+
+  // gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bilibili_obj.indexBuffer);
+  // gl.drawElements(gl.TRIANGLES, bilibili_faces.length, gl.UNSIGNED_SHORT, 0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, bilibili_obj.vertexBuffer)
+  count = bilibili_array.length / 3 
+  gl.drawArrays(gl.TRIANGLES,0,count)
+
+  // 绘制 bilibili2
+  gl.enableVertexAttribArray(positionLocation);
+  gl.bindBuffer(gl.ARRAY_BUFFER, bilibili2_obj.vertexBuffer);
+  var size = 3;
+  var type = gl.FLOAT;
+  var normalize = false;
+  var stride = 0;
+  var offset = 0;
+  gl.vertexAttribPointer(positionLocation, size, type, normalize, stride, offset);
+  // 顶点颜色buffer
+  gl.enableVertexAttribArray(colorLocation);
+  gl.bindBuffer(gl.ARRAY_BUFFER, bilibili2_obj.colorBuffer);
+  var size = 3;
+  var type = gl.FLOAT;
+  var normalize = false;         // normalize the data (convert from 0-255 to 0-1)
+  var stride = 0;
+  var offset = 0;
+  gl.vertexAttribPointer(colorLocation, size, type, normalize, stride, offset);
+
+ // 顶点颜色buffer
+ gl.enableVertexAttribArray(normalLocation);
+ gl.bindBuffer(gl.ARRAY_BUFFER, bilibili2_obj.normalBuffer);
+ var size = 3;          // 3 components per iteration
+ var type = gl.FLOAT;   // the data is 32bit floating point values
+ var normalize = false; // normalize the data (convert from 0-255 to 0-1)
+ var stride = 0;        // 0 = move forward size * sizeof(type) each iteration to get the next position
+ var offset = 0;        // start at the beginning of the buffer
+ gl.vertexAttribPointer(
+     normalLocation, size, type, normalize, stride, offset);
+
+
+  changeMatrix = m4.translation(bilibili2_center[0],bilibili2_center[1],bilibili2_center[2])
+  var T = m4.translation(bilibili2_translation[0], bilibili2_translation[1], bilibili2_translation[2]);
+  var Rx = m4.axisRotation([1,0,0,1],bilibili2_rotation[0]);
+  var Ry = m4.axisRotation([0,1,0,1],bilibili2_rotation[1]);
+  var Rz = m4.axisRotation([0,0,1,1],bilibili2_rotation[2]);
+  var S = m4.scaling(bilibili2_scale[0], bilibili2_scale[1], bilibili2_scale[2]);
+  unchangeMatrix = m4.translation(-bilibili2_center[0],-bilibili2_center[1],-bilibili2_center[2])
+
+  mvMatrix =  m4.multiply(m4.multiply( m4.multiply( m4.multiply( m4.multiply(m4.multiply(changeMatrix,T),Rx),Ry),Rz),S),unchangeMatrix);
+	matrix = m4.multiply(viewProjectionMatrix,mvMatrix);
+
+  bilibili2_directZ = [0,0,1,1];
+  bilibili2_directZ = m4.transformNormal(mvMatrix,bilibili2_directZ);
+
+  matrix = m4.multiply(viewProjectionMatrix,mvMatrix);
+  var worldInverseMatrix = m4.inverse(matrix)
+  var worldInverseTransposeMatrix = m4.transpose(worldInverseMatrix)
+
+      // Set the matrices
+  gl.uniformMatrix4fv(worldViewProjectionLocation, false, matrix);
+  gl.uniformMatrix4fv(worldInverseTransposeLocation, false, worldInverseTransposeMatrix);
+  gl.uniformMatrix4fv(worldLocation,false, mvMatrix)
+
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bilibili2_obj.indexBuffer);
+  // // // 绘制
+  gl.drawElements(gl.TRIANGLES, bilibili2_faces.length, gl.UNSIGNED_SHORT, 0);
+
+
+  // ground
+  gl.enableVertexAttribArray(positionLocation);
+  gl.bindBuffer(gl.ARRAY_BUFFER, ground_obj.vertexBuffer);
+  var size = 3;
+  var type = gl.FLOAT;
+  var normalize = false;
+  var stride = 0;
+  var offset = 0;
+  gl.vertexAttribPointer(positionLocation, size, type, normalize, stride, offset);
+  // 顶点颜色buffer
+  gl.enableVertexAttribArray(colorLocation);
+  gl.bindBuffer(gl.ARRAY_BUFFER, ground_obj.colorBuffer);
+  var size = 3;
+  var type = gl.FLOAT;
+  var normalize = false;         // normalize the data (convert from 0-255 to 0-1)
+  var stride = 0;
+  var offset = 0;
+  gl.vertexAttribPointer(colorLocation, size, type, normalize, stride, offset);
+
+  gl.enableVertexAttribArray(normalLocation);
+    gl.bindBuffer(gl.ARRAY_BUFFER, ground_obj.normalBuffer);
+    var size = 3;          // 3 components per iteration
+    var type = gl.FLOAT;   // the data is 32bit floating point values
+    var normalize = false; // normalize the data (convert from 0-255 to 0-1)
+    var stride = 0;        // 0 = move forward size * sizeof(type) each iteration to get the next position
+    var offset = 0;        // start at the beginning of the buffer
+    gl.vertexAttribPointer(
+        normalLocation, size, type, normalize, stride, offset);
+        
+
+  changeMatrix = m4.translation(ground_center[0],ground_center[1],ground_center[2])
+  var T = m4.translation(ground_translation[0], ground_translation[1], ground_translation[2]);
+  var Rx = m4.axisRotation([1,0,0,1],ground_rotation[0]);
+  var Ry = m4.axisRotation([0,1,0,1],ground_rotation[1]);
+  var Rz = m4.axisRotation([0,0,1,1],ground_rotation[2]);
+  var S = m4.scaling(ground_scale[0], ground_scale[1], ground_scale[2]);
+  unchangeMatrix = m4.translation(-ground_center[0],-ground_center[1],-ground_center[2])
+
+  mvMatrix =  m4.multiply(m4.multiply( m4.multiply( m4.multiply( m4.multiply(m4.multiply(changeMatrix,T),Rx),Ry),Rz),S),unchangeMatrix);
+	matrix = m4.multiply(viewProjectionMatrix,mvMatrix);
+
+  ground_directZ = [0,0,1,1];
+  ground_directZ = m4.transformNormal(mvMatrix,ground_directZ);
+
+  matrix = m4.multiply(viewProjectionMatrix,mvMatrix);
+  var worldInverseMatrix = m4.inverse(matrix)
+  var worldInverseTransposeMatrix = m4.transpose(worldInverseMatrix)
+
+      // Set the matrices
+  gl.uniformMatrix4fv(worldViewProjectionLocation, false, matrix);
+  gl.uniformMatrix4fv(worldInverseTransposeLocation, false, worldInverseTransposeMatrix);
+  gl.uniformMatrix4fv(worldLocation,false, mvMatrix)
+
+  // gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ground_obj.indexBuffer);
+  // // // 绘制
+  // gl.drawElements(gl.TRIANGLES, ground_faces.length, gl.UNSIGNED_SHORT, 0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, ground_obj.vertexBuffer)
+  count = ground_array.length / 3 
+  gl.drawArrays(gl.TRIANGLES,0,count)
+
+  // light
+  gl.enableVertexAttribArray(positionLocation);
+  gl.bindBuffer(gl.ARRAY_BUFFER, light_obj.vertexBuffer);
+  var size = 3;
+  var type = gl.FLOAT;
+  var normalize = false;
+  var stride = 0;
+  var offset = 0;
+  gl.vertexAttribPointer(positionLocation, size, type, normalize, stride, offset);
+  // 顶点颜色buffer
+  gl.enableVertexAttribArray(colorLocation);
+  gl.bindBuffer(gl.ARRAY_BUFFER, light_obj.colorBuffer);
+  var size = 3;
+  var type = gl.FLOAT;
+  var normalize = false;         // normalize the data (convert from 0-255 to 0-1)
+  var stride = 0;
+  var offset = 0;
+  gl.vertexAttribPointer(colorLocation, size, type, normalize, stride, offset);
+
+  gl.enableVertexAttribArray(normalLocation);
+    gl.bindBuffer(gl.ARRAY_BUFFER, light_obj.normalBuffer);
+    var size = 3;          // 3 components per iteration
+    var type = gl.FLOAT;   // the data is 32bit floating point values
+    var normalize = false; // normalize the data (convert from 0-255 to 0-1)
+    var stride = 0;        // 0 = move forward size * sizeof(type) each iteration to get the next position
+    var offset = 0;        // start at the beginning of the buffer
+    gl.vertexAttribPointer(
+        normalLocation, size, type, normalize, stride, offset);
+        
+
+  var T = m4.translation(light_pos[0], light_pos[1], light_pos[2]);
+
+  mvMatrix =  T
+	matrix = m4.multiply(viewProjectionMatrix,mvMatrix);
+  var worldInverseMatrix = m4.inverse(matrix)
+  var worldInverseTransposeMatrix = m4.transpose(worldInverseMatrix)
+
+      // Set the matrices
+  gl.uniformMatrix4fv(worldViewProjectionLocation, false, matrix);
+  gl.uniformMatrix4fv(worldInverseTransposeLocation, false, worldInverseTransposeMatrix);
+  gl.uniformMatrix4fv(worldLocation,false, mvMatrix)
+
+  // gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, light_obj.indexBuffer);
+  // // // 绘制
+  // gl.drawElements(gl.TRIANGLES, light_faces.length, gl.UNSIGNED_SHORT, 0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, light_obj.vertexBuffer)
+  count = light_array.length / 3 
+  gl.drawArrays(gl.TRIANGLES,0,count)
+}
+
+function computeAvgNormalVector(vertice, indexs)
+{
+   normal_temp = []
+   normal_vector = []
+   
+   for(i=0; i<indexs.length ; i+=3)
+   {
+      // 获得了一个三角形的索引， 所以我找顶点
+      a = indexs[i]
+      b = indexs[i+1]
+      c = indexs[i+2]
+      // 得到三角形的三个顶点
+      va = [ vertice[a*3], vertice[a*3+1], vertice[a*3+2] ] 
+      vb = [ vertice[b*3], vertice[b*3+1], vertice[b*3+2] ]
+      vc = [ vertice[c*3], vertice[c*3+1], vertice[c*3+2] ]
+      // 构造normal 
+      t1 = m4.subtractVectors(vb,va)
+      t2 = m4.subtractVectors(vc,va)
+      normal = m4.normalize(m4.cross(t2,t1))
+      // 把normal放到三角形里面去
+      if(normal_temp.length<=a)
+      {
+        normal_temp.push([normal]) 
+      }
+      else{
+        normal_temp[a].push(normal)
+      }
+      if(normal_temp.length<=b)
+      {
+        normal_temp.push([normal]) 
+      }
+      else{
+        normal_temp[b].push(normal)
+      }
+      if(normal_temp.length<=c)
+      {
+        normal_temp.push([normal]) 
+      }
+      else{
+        normal_temp[c].push(normal)
+      }
+   }
+   // noraml 是一个 下标是顶点索引 normal[i] 是此顶点含有的法向量的合集
+   // 进行法向量的求平均
+   for(i=0; i<normal_temp.length ; i++)
+   {
+      sum = [0,0,0]
+      for(j=0 ; j<normal_temp[i].length ; j++)
+      {
+         sum = m4.addVectors(normal_temp[i][j],sum)     
+      }
+      sum[0] = sum[0]/normal_temp[i].length
+      sum[1] = sum[1]/normal_temp[i].length
+      sum[2] = sum[2]/normal_temp[i].length
+      sum = m4.normalize(sum)
+      normal_vector.push(sum[0])
+      normal_vector.push(sum[1])
+      normal_vector.push(sum[2])
+   }
+   return normal_vector
+}
+
+function getArray(vertice, indexs)
+{
+  array = []
+  for(i=0; i<indexs.length ; i+=3)
+  {
+     // 获得了一个三角形的索引， 所以我找顶点
+     a = indexs[i]
+     b = indexs[i+1]
+     c = indexs[i+2]
+     // 把顶点添加到array里 重新排列
+     array.push(vertice[a*3])
+     array.push(vertice[a*3+1])
+     array.push(vertice[a*3+2])
+     array.push(vertice[b*3])
+     array.push(vertice[b*3+1])
+     array.push(vertice[b*3+2])
+     array.push(vertice[c*3])
+     array.push(vertice[c*3+1])
+     array.push(vertice[c*3+2])
+  }
+  return array
+}
+function getArrayColors(colors, indexs)
+{
+  new_colors = []
+  for(i=0; i<indexs.length ; i+=3)
+  {
+     // 获得了一个三角形的索引， 所以我找顶点
+     a = indexs[i]
+     b = indexs[i+1]
+     c = indexs[i+2]
+     // 把顶点添加到array里 重新排列
+     new_colors.push(colors[a*3])
+     new_colors.push(colors[a*3+1])
+     new_colors.push(colors[a*3+2])
+     new_colors.push(colors[b*3])
+     new_colors.push(colors[b*3+1])
+     new_colors.push(colors[b*3+2])
+     new_colors.push(colors[c*3])
+     new_colors.push(colors[c*3+1])
+     new_colors.push(colors[c*3+2])
+  }
+  return new_colors
+}
+
+
+
+function computeNormalVector(vertice, indexs)
+{
+  normal_array = []
+  for(i=0; i<indexs.length ; i+=3)
+  {
+     // 获得了一个三角形的索引， 所以我找顶点
+     a = indexs[i]
+     b = indexs[i+1]
+     c = indexs[i+2]
+     // 得到三角形的三个顶点
+     va = [ vertice[a*3], vertice[a*3+1], vertice[a*3+2] ] 
+     vb = [ vertice[b*3], vertice[b*3+1], vertice[b*3+2] ]
+     vc = [ vertice[c*3], vertice[c*3+1], vertice[c*3+2] ]
+     //构造normal 
+     t1 = m4.subtractVectors(vb,va)
+     t2 = m4.subtractVectors(vc,va)
+     normal = m4.normalize(m4.cross(t2,t1))
+     for(h = 0 ;h<3 ;h++){
+      normal_array.push(normal[0])
+      normal_array.push(normal[1])
+      normal_array.push(normal[2])
+    }
+  }
+  return normal_array
+}
+
+
+
+
+
+//  设置UI
 webglLessonsUI.setupSlider("#cameraAngle", {value: radToDeg(cameraAngleRadians), slide: updateCameraAngle, min: -360, max: 360});
+webglLessonsUI.setupSlider("#light_posx", { value: light_pos[0], slide: light_updatePosition(0), min: -1000, max: 400 });
+webglLessonsUI.setupSlider("#light_posy", { value: light_pos[1], slide: light_updatePosition(1), min: -1000, max: 800 });
+webglLessonsUI.setupSlider("#light_posz", { value: light_pos[2], slide: light_updatePosition(2), min: -1000, max: 600 });
+// 设置UI
+webglLessonsUI.setupSlider("#bilibili_fieldOfView", { value: radToDeg(bilibili_fieldOfViewRadians), slide: bilibili_updateFieldOfView, min: 30, max: 120 });
+webglLessonsUI.setupSlider("#shininess", {value: shininess, slide: updateShininess, min: 1, max: 300});
+
+function updateShininess(event, ui) {
+  shininess = ui.value;
+  drawSceneIndex();1
+}
+
+
+function light_updatePosition(index) {
+  return function (event, ui) {
+    light_pos[index] = ui.value;
+    drawSceneIndex();
+  };
+}
+
 function updateCameraAngle(event, ui) {
   cameraAngleRadians = degToRad(ui.value);
   drawSceneIndex();
 }
-// webglLessonsUI.setupSlider("#bilibili_fieldOfView", { value: radToDeg(bilibili_fieldOfViewRadians), slide: bilibili_updateFieldOfView, min: 30, max: 120 });
-// webglLessonsUI.setupSlider("#bilibili_x", { value: bilibili_translation[0], slide: bilibili_updatePosition(0), min: -400, max: 200 });
-// webglLessonsUI.setupSlider("#bilibili_y", { value: bilibili_translation[1], slide: bilibili_updatePosition(1), min: -400, max: 300 });
-// webglLessonsUI.setupSlider("#bilibili_z", { value: bilibili_translation[2], slide: bilibili_updatePosition(2), min: -1000, max: 0 });
-// webglLessonsUI.setupSlider("#bilibili_angleX", { value: radToDeg(bilibili_rotation[0]), slide: bilibili_updateRotation(0), max: 360 });
-// webglLessonsUI.setupSlider("#bilibili_angleY", { value: radToDeg(bilibili_rotation[1]), slide: bilibili_updateRotation(1), max: 360 });
-// webglLessonsUI.setupSlider("#bilibili_angleZ", { value: radToDeg(bilibili_rotation[2]), slide: bilibili_updateRotation(2), max: 360 });
-// webglLessonsUI.setupSlider("#bilibili_scale", { value: bilibili_scale[0], slide: bilibili_updateScale(0), min: 0.01, max: 5, step: 0.01, precision: 2 });
 
-// webglLessonsUI.setupSlider("#bilibili2_fieldOfView", { value: radToDeg(bilibili2_fieldOfViewRadians), slide: bilibili2_updateFieldOfView, min: 30, max: 120 });
-// webglLessonsUI.setupSlider("#bilibili2_x", { value: bilibili2_translation[0], slide: bilibili2_updatePosition(0), min: -400, max: 200 });
-// webglLessonsUI.setupSlider("#bilibili2_y", { value: bilibili2_translation[1], slide: bilibili2_updatePosition(1), min: -400, max: 300 });
-// webglLessonsUI.setupSlider("#bilibili2_z", { value: bilibili2_translation[2], slide: bilibili2_updatePosition(2), min: -1000, max: 0 });
-// webglLessonsUI.setupSlider("#bilibili2_angleX", { value: radToDeg(bilibili2_rotation[0]), slide: bilibili2_updateRotation(0), max: 360 });
-// webglLessonsUI.setupSlider("#bilibili2_angleY", { value: radToDeg(bilibili2_rotation[1]), slide: bilibili2_updateRotation(1), max: 360 });
-// webglLessonsUI.setupSlider("#bilibili2_angleZ", { value: radToDeg(bilibili2_rotation[2]), slide: bilibili2_updateRotation(2), max: 360 });
-// webglLessonsUI.setupSlider("#bilibili2_scale", { value: bilibili2_scale[0], slide: bilibili2_updateScale(0), min: 0.01, max: 5, step: 0.01, precision: 2 });
-document.getElementById("pause").onclick = function () {
+document.getElementById("camerapause").onclick = function () {
   console.log("pause")
-  if(isAlive){
     console.log("pausealive")
     window.cancelAnimationFrame(requestAnimationid)
-    tick2()
-    isAlive = false;
-  }
 }
-document.getElementById("go").onclick = function () {
-  console.log("go")
-  if(!isAlive){
-    console.log("goalive")
+document.getElementById("objectpause").onclick = function () {
+  console.log("pause")
+    console.log("pausealive")
     window.cancelAnimationFrame(requestAnimationid2)
-    tick1()
-    isAlive = true;
-  }
 }
+document.getElementById("gocamera").onclick = function () {
+  console.log("go")
+    console.log("goalive")
+    tick1()
+}
+document.getElementById("goobject").onclick = function () {
+  console.log("go")
+    console.log("goalive")
+    tick2()
+}
+
+
 
 // // 设置滑块滑动
 function bilibili_updatePosition(index) {
@@ -333,18 +895,6 @@ function bilibili_updateFieldOfView(event, ui) {
   bilibili_fieldOfViewRadians = degToRad(ui.value);
   drawSceneIndex();
 }
-// document.getElementById("bilibili_forward").onclick = function () {
-//   bilibili_translation[0] += 100 * bilibili_directZ[0];
-//   bilibili_translation[1] += 100 * bilibili_directZ[1];
-//   bilibili_translation[2] += 100 * bilibili_directZ[2];
-//   drawSceneIndex();
-// }
-// document.getElementById("bilibili_backward").onclick = function () {
-//   bilibili_translation[0] -= 100 * bilibili_directZ[0];
-//   bilibili_translation[1] -= 100 * bilibili_directZ[1];
-//   bilibili_translation[2] -= 100 * bilibili_directZ[2];
-//   drawSceneIndex();
-// }
 
 // bilibili2
 function bilibili2_updatePosition(index) {
@@ -374,182 +924,6 @@ function bilibili2_updateFieldOfView(event, ui) {
   bilibili2_fieldOfViewRadians = degToRad(ui.value);
   drawSceneIndex();
 }
-// document.getElementById("bilibili2_forward").onclick = function () {
-//   bilibili2_translation[0] += 100 * bilibili2_directZ[0];
-//   bilibili2_translation[1] += 100 * bilibili2_directZ[1];
-//   bilibili2_translation[2] += 100 * bilibili2_directZ[2];
-//   drawSceneIndex();
-// }
-// document.getElementById("bilibili2_backward").onclick = function () {
-//   bilibili2_translation[0] -= 100 * bilibili2_directZ[0];
-//   bilibili2_translation[1] -= 100 * bilibili2_directZ[1];
-//   bilibili2_translation[2] -= 100 * bilibili2_directZ[2];
-//   drawSceneIndex();
-// }
-
-
-
-
-function drawSceneIndex() {
-  webglUtils.resizeCanvasToDisplaySize(gl.canvas);
-  gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-  // gl.enable(gl.CULL_FACE);
-  gl.enable(gl.DEPTH_TEST);
-  gl.useProgram(program);
-  gl.clearColor(1, 192/255, 203/255, 1.0)
-
-
-  gl.enableVertexAttribArray(positionLocation);
-  gl.bindBuffer(gl.ARRAY_BUFFER, bilibili_obj.vertexBuffer);
-  var size = 3;
-  var type = gl.FLOAT;
-  var normalize = false;
-  var stride = 0;
-  var offset = 0;
-  gl.vertexAttribPointer(positionLocation, size, type, normalize, stride, offset);
-  // 顶点颜色buffer
-  gl.enableVertexAttribArray(colorLocation);
-  gl.bindBuffer(gl.ARRAY_BUFFER, bilibili_obj.colorBuffer);
-  var size = 3;
-  var type = gl.FLOAT;
-  var normalize = false;         // normalize the data (convert from 0-255 to 0-1)
-  var stride = 0;
-  var offset = 0;
-  gl.vertexAttribPointer(colorLocation, size, type, normalize, stride, offset);
-
-
-
-
-  // 计算图像转换
-  var aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
-  var zNear = 1;
-  var zFar = 2000;
-  var perMatrix = m4.perspective(bilibili_fieldOfViewRadians, aspect, zNear, zFar);
-  
-
-
-  // 相机
-  var radius = 250;
-  var fPosition = [radius, 0, 0];
-  camera_translation = [-150, 0 , -600];
-
-  camerachangeMatrix = m4.translation(camera_translation[0],camera_translation[1],camera_translation[2])
-  var cameraMatrix = m4.yRotation(cameraAngleRadians);
-  cameraMatrix = m4.translate(cameraMatrix, 250, 200, radius * 1.5);
-  var cameraPosition = [
-    cameraMatrix[12],
-    cameraMatrix[13],
-    cameraMatrix[14],
-  ];
-  var up = [0, 1, 0];
-  var cameraMatrix = m4.lookAt(cameraPosition, fPosition, up);
-  cameraunchangeMatrix = m4.translation(-camera_translation[0],-camera_translation[1],-camera_translation[2])
-
-  cameraMatrix = m4.multiply(m4.multiply(camerachangeMatrix,cameraMatrix),cameraunchangeMatrix);
-  var viewMatrix = m4.inverse(cameraMatrix);
-  var viewProjectionMatrix = m4.multiply(perMatrix, viewMatrix);
-
-
-  changeMatrix = m4.translation(bilibili_center[0],bilibili_center[1],bilibili_center[2])
-  var T = m4.translation(bilibili_translation[0], bilibili_translation[1], bilibili_translation[2]);
-  var Rx = m4.axisRotation([1,0,0,1],bilibili_rotation[0]);
-  var Ry = m4.axisRotation([0,1,0,1],bilibili_rotation[1]);
-  var Rz = m4.axisRotation([0,0,1,1],bilibili_rotation[2]);
-  var S = m4.scaling(bilibili_scale[0], bilibili_scale[1], bilibili_scale[2]);
-  unchangeMatrix = m4.translation(-bilibili_center[0],-bilibili_center[1],-bilibili_center[2])
-  mvMatrix =  m4.multiply(m4.multiply( m4.multiply( m4.multiply( m4.multiply(m4.multiply(changeMatrix,T),Rx),Ry),Rz),S),unchangeMatrix);
-  matrix = m4.multiply(viewProjectionMatrix,mvMatrix);
-  
-
-  bilibili_directZ = [0,0,1,1];
-  bilibili_directZ = m4.transformNormal(mvMatrix,bilibili_directZ);
-
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bilibili_obj.indexBuffer);
-  gl.uniformMatrix4fv(matrixLocation, false, matrix);
-  gl.drawElements(gl.TRIANGLES, bilibili_faces.length, gl.UNSIGNED_SHORT, 0);
-
-
-  // 绘制 bilibili2
-  gl.enableVertexAttribArray(positionLocation);
-  gl.bindBuffer(gl.ARRAY_BUFFER, bilibili2_obj.vertexBuffer);
-  var size = 3;
-  var type = gl.FLOAT;
-  var normalize = false;
-  var stride = 0;
-  var offset = 0;
-  gl.vertexAttribPointer(positionLocation, size, type, normalize, stride, offset);
-  // 顶点颜色buffer
-  gl.enableVertexAttribArray(colorLocation);
-  gl.bindBuffer(gl.ARRAY_BUFFER, bilibili2_obj.colorBuffer);
-  var size = 3;
-  var type = gl.FLOAT;
-  var normalize = false;         // normalize the data (convert from 0-255 to 0-1)
-  var stride = 0;
-  var offset = 0;
-  gl.vertexAttribPointer(colorLocation, size, type, normalize, stride, offset);
-
-  changeMatrix = m4.translation(bilibili2_center[0],bilibili2_center[1],bilibili2_center[2])
-  var T = m4.translation(bilibili2_translation[0], bilibili2_translation[1], bilibili2_translation[2]);
-  var Rx = m4.axisRotation([1,0,0,1],bilibili2_rotation[0]);
-  var Ry = m4.axisRotation([0,1,0,1],bilibili2_rotation[1]);
-  var Rz = m4.axisRotation([0,0,1,1],bilibili2_rotation[2]);
-  var S = m4.scaling(bilibili2_scale[0], bilibili2_scale[1], bilibili2_scale[2]);
-  unchangeMatrix = m4.translation(-bilibili2_center[0],-bilibili2_center[1],-bilibili2_center[2])
-
-  mvMatrix =  m4.multiply(m4.multiply( m4.multiply( m4.multiply( m4.multiply(m4.multiply(changeMatrix,T),Rx),Ry),Rz),S),unchangeMatrix);
-	matrix = m4.multiply(viewProjectionMatrix,mvMatrix);
-
-  bilibili2_directZ = [0,0,1,1];
-  bilibili2_directZ = m4.transformNormal(mvMatrix,bilibili2_directZ);
-
-  gl.uniformMatrix4fv(matrixLocation, false, matrix);
-
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bilibili2_obj.indexBuffer);
-  // // // 绘制
-  gl.drawElements(gl.TRIANGLES, bilibili2_faces.length, gl.UNSIGNED_SHORT, 0);
-
-
-  // ground
-  gl.enableVertexAttribArray(positionLocation);
-  gl.bindBuffer(gl.ARRAY_BUFFER, ground_obj.vertexBuffer);
-  var size = 3;
-  var type = gl.FLOAT;
-  var normalize = false;
-  var stride = 0;
-  var offset = 0;
-  gl.vertexAttribPointer(positionLocation, size, type, normalize, stride, offset);
-  // 顶点颜色buffer
-  gl.enableVertexAttribArray(colorLocation);
-  gl.bindBuffer(gl.ARRAY_BUFFER, ground_obj.colorBuffer);
-  var size = 3;
-  var type = gl.FLOAT;
-  var normalize = false;         // normalize the data (convert from 0-255 to 0-1)
-  var stride = 0;
-  var offset = 0;
-  gl.vertexAttribPointer(colorLocation, size, type, normalize, stride, offset);
-
-  changeMatrix = m4.translation(ground_center[0],ground_center[1],ground_center[2])
-  var T = m4.translation(ground_translation[0], ground_translation[1], ground_translation[2]);
-  var Rx = m4.axisRotation([1,0,0,1],ground_rotation[0]);
-  var Ry = m4.axisRotation([0,1,0,1],ground_rotation[1]);
-  var Rz = m4.axisRotation([0,0,1,1],ground_rotation[2]);
-  var S = m4.scaling(ground_scale[0], ground_scale[1], ground_scale[2]);
-  unchangeMatrix = m4.translation(-ground_center[0],-ground_center[1],-ground_center[2])
-
-  mvMatrix =  m4.multiply(m4.multiply( m4.multiply( m4.multiply( m4.multiply(m4.multiply(changeMatrix,T),Rx),Ry),Rz),S),unchangeMatrix);
-	matrix = m4.multiply(viewProjectionMatrix,mvMatrix);
-
-  ground_directZ = [0,0,1,1];
-  ground_directZ = m4.transformNormal(mvMatrix,ground_directZ);
-
-  gl.uniformMatrix4fv(matrixLocation, false, matrix);
-
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ground_obj.indexBuffer);
-  // // // 绘制
-  gl.drawElements(gl.TRIANGLES, ground_faces.length, gl.UNSIGNED_SHORT, 0);
-}
-
 
 function drawbilibili() {
   bilibili_vertices = [62.29, 281.2, 60.0, 133.0, 210.49, 60.0, 133.0, 210.49, 40.0,
@@ -1996,7 +2370,6 @@ function drawbilibili() {
     [0.8666666666666667, 0.8862745098039215, 0.8941176470588236], //灰色
   ]
   bilibili_colors = []
-  console.log(bilibili_vertices.length / 3)
   //触手
   for (var i = 0; i <= 15; i++) {
     bilibili_colors.push(bilibili_color_type[0][0]);
@@ -4842,7 +5215,6 @@ function drawbilibili2() {
     [1,0.8666666666666667,0.10196078431372549], //灰色
   ]
   bilibili2_colors = []
-  console.log(bilibili2_vertices.length / 3)
   //触手
   for (var i = 0; i <= 745; i++) {
     bilibili2_colors.push(bilibili2_color_type[0][0]);
@@ -4893,10 +5265,10 @@ function drawground()
         //  |/      |/
         //  v2------v3
   ground_vertices = [
-    800,  -20 ,  500,     -800,  -20,  500,  // v0 White
-    -800,  -30,  500,     800,  -30,  500,  // v1 Magenta
-    800, -30,  -500,     800,  -20,  -500,  // v2 Red
-    -800, -20,  -500,     -800,  -30,  -500,  // v3 Yellow
+    800,  -20 ,  500,     -800,  -20,  500,  // v0 v1
+    -800,  -30,  500,     800,  -30,  500,  // v2 v3
+    800, -30,  -500,     800,  -20,  -500,  // v4 v5
+    -800, -20,  -500,     -800,  -30,  -500,  // v6 v7
   ]
 
   ground_faces = [
@@ -4919,4 +5291,328 @@ function drawground()
     1, 235/255, 205/255,
   ]
 
+}
+
+
+function drawlight()
+{
+
+        // 创建一个立方体
+        //    v6----- v5
+        //   /|      /|
+        //  v1------v0|
+        //  | |     | |
+        //  | |v7---|-|v4
+        //  |/      |/
+        //  v2------v3
+  light_vertices = [
+    20,  20 ,  20,     -20,  20,  20,  // v0 v1
+    -20,  -20,  20,     20,  -20,  20,  // v2 v3
+    20, -20,  -20,     20,  20,  -20,  // v4 v5
+    -20, 20,  -20,     -20,  -20,  -20,  // v6 v7
+  ]
+
+  light_faces = [
+    0, 1, 2,   0, 2, 3,    // 前
+    0, 3, 4,   0, 4, 5,    // 右
+    0, 5, 6,   0, 6, 1,    // 上
+    1, 6, 7,   1, 7, 2,    // 左
+    7, 4, 3,   7, 3, 2,    // 下
+    4, 7, 6,   4, 6, 5     // 后
+  ]
+
+  light_colors = [
+    217/255, 217/255, 25/255,
+    217/255, 217/255, 25/255,
+    217/255, 217/255, 25/255,
+    217/255, 217/255, 25/255,
+    217/255, 217/255, 25/255,
+    217/255, 217/255, 25/255,
+    217/255, 217/255, 25/255,
+    217/255, 217/255, 25/255,
+  ]
+
+}
+
+
+function setGeometry(gl) {
+  var positions = new Float32Array([
+          // left column front
+          0,   0,  0,
+          0, 150,  0,
+          30,   0,  0,
+          0, 150,  0,
+          30, 150,  0,
+          30,   0,  0,
+
+          // top rung front
+          30,   0,  0,
+          30,  30,  0,
+          100,   0,  0,
+          30,  30,  0,
+          100,  30,  0,
+          100,   0,  0,
+
+          // middle rung front
+          30,  60,  0,
+          30,  90,  0,
+          67,  60,  0,
+          30,  90,  0,
+          67,  90,  0,
+          67,  60,  0,
+
+          // left column back
+            0,   0,  30,
+           30,   0,  30,
+            0, 150,  30,
+            0, 150,  30,
+           30,   0,  30,
+           30, 150,  30,
+
+          // top rung back
+           30,   0,  30,
+          100,   0,  30,
+           30,  30,  30,
+           30,  30,  30,
+          100,   0,  30,
+          100,  30,  30,
+
+          // middle rung back
+           30,  60,  30,
+           67,  60,  30,
+           30,  90,  30,
+           30,  90,  30,
+           67,  60,  30,
+           67,  90,  30,
+
+          // top
+            0,   0,   0,
+          100,   0,   0,
+          100,   0,  30,
+            0,   0,   0,
+          100,   0,  30,
+            0,   0,  30,
+
+          // top rung right
+          100,   0,   0,
+          100,  30,   0,
+          100,  30,  30,
+          100,   0,   0,
+          100,  30,  30,
+          100,   0,  30,
+
+          // under top rung
+          30,   30,   0,
+          30,   30,  30,
+          100,  30,  30,
+          30,   30,   0,
+          100,  30,  30,
+          100,  30,   0,
+
+          // between top rung and middle
+          30,   30,   0,
+          30,   60,  30,
+          30,   30,  30,
+          30,   30,   0,
+          30,   60,   0,
+          30,   60,  30,
+
+          // top of middle rung
+          30,   60,   0,
+          67,   60,  30,
+          30,   60,  30,
+          30,   60,   0,
+          67,   60,   0,
+          67,   60,  30,
+
+          // right of middle rung
+          67,   60,   0,
+          67,   90,  30,
+          67,   60,  30,
+          67,   60,   0,
+          67,   90,   0,
+          67,   90,  30,
+
+          // bottom of middle rung.
+          30,   90,   0,
+          30,   90,  30,
+          67,   90,  30,
+          30,   90,   0,
+          67,   90,  30,
+          67,   90,   0,
+
+          // right of bottom
+          30,   90,   0,
+          30,  150,  30,
+          30,   90,  30,
+          30,   90,   0,
+          30,  150,   0,
+          30,  150,  30,
+
+          // bottom
+          0,   150,   0,
+          0,   150,  30,
+          30,  150,  30,
+          0,   150,   0,
+          30,  150,  30,
+          30,  150,   0,
+
+          // left side
+          0,   0,   0,
+          0,   0,  30,
+          0, 150,  30,
+          0,   0,   0,
+          0, 150,  30,
+          0, 150,   0]);
+
+  // Center the F around the origin and Flip it around. We do this because
+  // we're in 3D now with and +Y is up where as before when we started with 2D
+  // we had +Y as down.
+
+  // We could do by changing all the values above but I'm lazy.
+  // We could also do it with a matrix at draw time but you should
+  // never do stuff at draw time if you can do it at init time.
+  var matrix = m4.xRotation(Math.PI);
+  matrix = m4.translate(matrix, -50, -75, -15);
+
+  for (var ii = 0; ii < positions.length; ii += 3) {
+    var vector = m4.transformPoint(matrix, [positions[ii + 0], positions[ii + 1], positions[ii + 2], 1]);
+    positions[ii + 0] = vector[0];
+    positions[ii + 1] = vector[1];
+    positions[ii + 2] = vector[2];
+  }
+
+  gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+}
+
+function setNormals(gl) {
+  var normals = new Float32Array([
+          // left column front
+          0, 0, 1,
+          0, 0, 1,
+          0, 0, 1,
+          0, 0, 1,
+          0, 0, 1,
+          0, 0, 1,
+
+          // top rung front
+          0, 0, 1,
+          0, 0, 1,
+          0, 0, 1,
+          0, 0, 1,
+          0, 0, 1,
+          0, 0, 1,
+
+          // middle rung front
+          0, 0, 1,
+          0, 0, 1,
+          0, 0, 1,
+          0, 0, 1,
+          0, 0, 1,
+          0, 0, 1,
+
+          // left column back
+          0, 0, -1,
+          0, 0, -1,
+          0, 0, -1,
+          0, 0, -1,
+          0, 0, -1,
+          0, 0, -1,
+
+          // top rung back
+          0, 0, -1,
+          0, 0, -1,
+          0, 0, -1,
+          0, 0, -1,
+          0, 0, -1,
+          0, 0, -1,
+
+          // middle rung back
+          0, 0, -1,
+          0, 0, -1,
+          0, 0, -1,
+          0, 0, -1,
+          0, 0, -1,
+          0, 0, -1,
+
+          // top
+          0, 1, 0,
+          0, 1, 0,
+          0, 1, 0,
+          0, 1, 0,
+          0, 1, 0,
+          0, 1, 0,
+
+          // top rung right
+          1, 0, 0,
+          1, 0, 0,
+          1, 0, 0,
+          1, 0, 0,
+          1, 0, 0,
+          1, 0, 0,
+
+          // under top rung
+          0, -1, 0,
+          0, -1, 0,
+          0, -1, 0,
+          0, -1, 0,
+          0, -1, 0,
+          0, -1, 0,
+
+          // between top rung and middle
+          1, 0, 0,
+          1, 0, 0,
+          1, 0, 0,
+          1, 0, 0,
+          1, 0, 0,
+          1, 0, 0,
+
+          // top of middle rung
+          0, 1, 0,
+          0, 1, 0,
+          0, 1, 0,
+          0, 1, 0,
+          0, 1, 0,
+          0, 1, 0,
+
+          // right of middle rung
+          1, 0, 0,
+          1, 0, 0,
+          1, 0, 0,
+          1, 0, 0,
+          1, 0, 0,
+          1, 0, 0,
+
+          // bottom of middle rung.
+          0, -1, 0,
+          0, -1, 0,
+          0, -1, 0,
+          0, -1, 0,
+          0, -1, 0,
+          0, -1, 0,
+
+          // right of bottom
+          1, 0, 0,
+          1, 0, 0,
+          1, 0, 0,
+          1, 0, 0,
+          1, 0, 0,
+          1, 0, 0,
+
+          // bottom
+          0, -1, 0,
+          0, -1, 0,
+          0, -1, 0,
+          0, -1, 0,
+          0, -1, 0,
+          0, -1, 0,
+
+          // left side
+          -1, 0, 0,
+          -1, 0, 0,
+          -1, 0, 0,
+          -1, 0, 0,
+          -1, 0, 0,
+          -1, 0, 0]);
+  gl.bufferData(gl.ARRAY_BUFFER, normals, gl.STATIC_DRAW);
 }
