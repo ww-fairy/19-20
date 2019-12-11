@@ -55,12 +55,6 @@ https://www.cnblogs.com/zhangwuji/p/7899075.html
 
 #### 5. Ubuntu下~/.bashrc文件的恢复方法
 
-2018年02月18日 17:33:38 [yucicheung](https://me.csdn.net/yucicheung) 阅读数 7886
-
-
-
- 版权声明：如要转载，请在本帖的评论中声明，并且在转载后文章中保留原文链接。 https://blog.csdn.net/yucicheung/article/details/79334998
-
 ##### 问题描述
 
 如果不小心在更改环境变量文件`~/.bashrc`时出现将文件内容覆盖的情况，比如`echo hello world > ~/.bashrc`没有使用添加模式而是覆盖模式． 
@@ -173,7 +167,7 @@ manual 查看指令的含义
 man [section number] [命令名称]
 ```
 
-![1576052032626](每天学点Linux.assets/1576052032626.png)
+![1576052032626](每天学点Linux.assets\1576052032626.png)
 
 man关键字查询
 
@@ -190,7 +184,7 @@ sudo useradd testuser
 sudo userdel testuser
 ```
 
-![1576052278249](每天学点Linux.assets/1576052278249.png)
+![1576052278249](每天学点Linux.assets\1576052278249.png)
 
 执行sh文件的时候， 注意给 chmod +x 加权限直接运行
 
@@ -317,7 +311,7 @@ arp
 
  通过ip地址存储 MAC 地址的 cache
 
-![1576054666014](每天学点Linux.assets/1576054666014.png)
+![1576054666014](每天学点Linux.assets\1576054666014.png)
 
 删除 cache
 
@@ -351,7 +345,7 @@ sudo wireshark &
 
 图形界面，网络上手动设置
 
-![1576055853511](每天学点Linux.assets/1576055853511.png)
+![1576055853511](每天学点Linux.assets\1576055853511.png)
 
 ```/var/log/apache2/access.log``` 为 dokuwiki 的get、post 的log
 
