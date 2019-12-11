@@ -184,7 +184,7 @@ sudo useradd testuser
 sudo userdel testuser
 ```
 
-![1576052278249](每天学点Linux.assets\1576052278249.png)
+![1576052278249](每天学点Linux.assets\\1576052278249.png)
 
 执行sh文件的时候， 注意给 chmod +x 加权限直接运行
 
