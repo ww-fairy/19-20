@@ -184,7 +184,7 @@ sudo useradd testuser
 sudo userdel testuser
 ```
 
-![1576052278249](每天学点Linux.assets\\1576052278249.png)
+![1576052278249](每天学点Linux.assets/1576052278249.png)
 
 执行sh文件的时候， 注意给 chmod +x 加权限直接运行
 
@@ -377,3 +377,96 @@ grep ^[aeiou] /etc/passwd | awk -F: '{print $1, $3}' | sort -u
 
 log --tag tag messages
 
+#### 17.DNS server
+
+**bind 服务**
+
+配置的文件在 `/etc/bind/`文件夹下
+
+在named.conf 上搞域名
+
+
+
+
+
+**dig 命令**
+
+dig 命令 主要用来从DNS域名服务器查询主机地址信息 
+
+```
+$ dig baidu.com
+```
+
+```
+$ dig abc.filterinto.com CNAME
+```
+由于一些原因，希望从指定的 DNS 服务器上进行查询(从默认的 DNS 服务器上获得的结果可能不准确)。指定 DNS 服务器的方式为使用 @ 符号：
+如果不指定 DNS 服务器，dig 会依次使用 /etc/resolv.conf 里的地址作为 DNS 服务器：
+
+```
+$ dig @8.8.8.8 abc.filterinto.com
+```
+
+在前面的查询中我们指定了查询服务器为 8.8.8.8，这是谁家的 DNS 服务器？其实我们可以使用 dig 的 -x 选项来反向解析 IP 地址对应的域名：
+
+```
+$ dig -x 8.8.8.8 +short
+```
+
+dig 命令默认返回的结果展示详细的信息，如果要获得精简的结果可以使用 +short 选项：
+
+```
+$ dig +short abc.filterinto.com
+```
+
+如果你好奇 dig 命令执行查询时都经历了哪些过程，你可以尝试使用 +trace 选项。它会输出从根域到最终结果的所有信息：
+
+```
+$ dig +trace abc.filterinto.com
+```
+
+![1576303627191](每天学点Linux.assets/1576303627191.png)
+
+
+
+#### 18. ipserver
+
+**netplan**  apply the new network config
+
+
+
+
+
+#### 19. RAID5 
+
+`lsblk -o NAME,SIZE,FSTYPE,TYPE,MOUNTPOIT`
+
+获取所有块设备信息, 查看硬盘在文件系统的情况
+
+软RAID指令
+
+**mdadm**
+
+`mdadm --create --verbose /dev/md0 --level=5 --raid-devices=3 /dev/sd{b,c,d}`
+
+`/dev/md0` 指定的块设备文件，后面用来挂载
+
+`mdadm --detail --scan ` 扫描配置文件
+
+**mkfs.ext4**
+
+`sudo mkfs.ext4 /dev/md0` 格式化硬盘
+
+**df -h**
+
+**tee  -a  filepath** 重定向输出到某文件
+
+`sudo update-initramfs -u` 更新内核
+
+`/etc/fstab`
+
+磁盘被手动挂载之后都必须把挂载信息写入/etc/fstab这个文件中，否则下次开机启动时仍然需要重新挂载。
+
+**挂载**
+
+当在 Linux 系统中使用这些硬件设备时，只有将Linux本身的文件目录与硬件设备的文件目录合二为一，硬件设备才能为我们所用。合二为一的过程称为“挂载”。
